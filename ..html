@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Chat Room</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+        
+        body {
+            background-color: #f5f5f5;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            color: #666;
+        }
+        
+        .status {
+            padding: 10px;
+            background-color: #e9e9e9;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .status.online {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .chat-area {
+            flex: 1;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            max-width: 80%;
+        }
+        
+        .message.sent {
+            margin-left: auto;
+        }
+        
+        .message .bubble {
+            padding: 10px 15px;
+            border-radius: 18px;
+            display: inline-block;
+            word-break: break-word;
+        }
+        
+        .message.received .bubble {
+            background-color: #f1f0f0;
+            color: #333;
+            border-top-left-radius: 5px;
+        }
+        
+        .message.sent .bubble {
+            background-color: #0b93f6;
+            color: white;
+            border-top-right-radius: 5px;
+        }
+        
+        .message .meta {
+            font-size: 12px;
+            color: #999;
+            margin-top: 5px;
+        }
+        
+        .input-area {
+            display: flex;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #eee;
+        }
+        
+        .input-area input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 24px;
+            outline: none;
+            font-size: 16px;
+        }
+        
+        .input-area button {
+            background-color: #0b93f6;
+            color: white;
+            border: none;
+            border-radius: 24px;
+            padding: 0 20px;
+            margin-left: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .input-area button:hover {
+            background-color: #0a84e0;
+        }
+        
+        .username-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 300px;
+            text-align: center;
+        }
+        
+        .modal-content h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        
+        .modal-content input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 16px;
+        }
+        
+        .modal-content button {
+            background-color: #0b93f6;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        
+        .users-count {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        .system-message {
+            text-align: center;
+            margin: 10px 0;
+            color: #888;
+            font-style: italic;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>P2P Chat Room</h1>
+            <p>Chat directly with others - no server, no authentication</p>
+            <div class="users-count">Connected users: <span id="user-count">1</span></div>
+        </div>
+        
+        <div id="status" class="status">Connecting to the P2P network...</div>
+        
+        <div class="chat-area">
+            <div id="messages" class="messages">
+                <div class="system-message">Welcome to the chat! Messages are sent directly between users.</div>
+            </div>
+            
+            <div class="input-area">
+                <input type="text" id="message-input" placeholder="Type your message..." disabled>
+                <button id="send-button" disabled>Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="username-modal" class="username-modal">
+        <div class="modal-content">
+            <h2>Enter a Username</h2>
+            <input type="text" id="username-input" placeholder="Your name">
+            <button id="join-button">Join Chat</button>
+        </div>
+    </div>
+    
+    <script>
+        // DOM elements
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        const statusDiv = document.getElementById('status');
+        const usernameModal = document.getElementById('username-modal');
+        const usernameInput = document.getElementById('username-input');
+        const joinButton = document.getElementById('join-button');
+        const userCountSpan = document.getElementById('user-count');
+        
+        // User data
+        let username = '';
+        let peerId = '';
+        let peer = null;
+        let connections = [];
+        
+        // Tracker information
+        const trackerUrls = [
+            'wss://tracker.openwebtorrent.com',
+            'wss://tracker.btorrent.xyz'
+        ];
+        
+        // Function to generate a random string (for unique peer ID)
+        function generateRandomId() {
+            return Math.random().toString(36).substr(2, 9);
+        }
+        
+        // Function to show a system message
+        function showSystemMessage(message) {
+            const systemMessageDiv = document.createElement('div');
+            systemMessageDiv.className = 'system-message';
+            systemMessageDiv.textContent = message;
+            messagesContainer.appendChild(systemMessageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Function to add a chat message to the UI
+        function addMessageToUI(text, sender, isSent = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            
+            const bubbleDiv = document.createElement('div');
+            bubbleDiv.className = 'bubble';
+            bubbleDiv.textContent = text;
+            
+            const metaDiv = document.createElement('div');
+            metaDiv.className = 'meta';
+            metaDiv.textContent = sender;
+            
+            messageDiv.appendChild(bubbleDiv);
+            messageDiv.appendChild(metaDiv);
+            
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Function to send a message to all peers
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message === '') return;
+            
+            // Create message object
+            const messageObj = {
+                text: message,
+                sender: username,
+                timestamp: Date.now()
+            };
+            
+            // Send to all peers
+            connections.forEach(conn => {
+                conn.send(messageObj);
+            });
+            
+            // Add to our own UI
+            addMessageToUI(message, 'You', true);
+            
+            // Clear input
+            messageInput.value = '';
+        }
+        
+        // Function to initiate peer connection
+        function initializePeer() {
+            peerId = 'chatroom-' + generateRandomId();
+            
+            // Create the Peer object
+            peer = new Peer(peerId, {
+                debug: 2
+            });
+            
+            // When peer is open (connection established with signaling server)
+            peer.on('open', id => {
+                console.log('My peer ID is: ' + id);
+                statusDiv.textContent = 'Connected to P2P network';
+                statusDiv.className = 'status online';
+                
+                // Enable input
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                
+                // Connect to a known peer in the room (if any)
+                joinRoom();
+            });
+            
+            // Handle incoming connections
+            peer.on('connection', conn => {
+                handleConnection(conn);
+            });
+            
+            // Handle errors
+            peer.on('error', err => {
+                console.error('Peer error:', err);
+                statusDiv.textContent = `Error: ${err.type}`;
+                statusDiv.className = 'status';
+            });
+        }
+        
+        // Function to join the chat room by attempting to connect to known peers
+        function joinRoom() {
+            // In a real app, you might get the list of peers from a tracker or a simple HTTP endpoint
+            // For simplicity, we'll use a fixed room name and rely on peer discovery
+            
+            // Announce your presence
+            showSystemMessage(`You joined as "${username}"`);
+            
+            // For a simple implementation, we'll just try to connect to a few potential peer IDs
+            // In a real implementation, you would use a discovery service or a tracker
+            attemptToPairWithExistingPeers();
+        }
+        
+        // Function to attempt to connect to potentially existing peers
+        function attemptToPairWithExistingPeers() {
+            // In a production app, you would use a proper discovery mechanism
+            // For this demo, we'll use localStorage to share peer IDs (works only on same browser)
+            let knownPeers = JSON.parse(localStorage.getItem('chatRoomPeers') || '[]');
+            
+            // Add our ID to the list
+            if (!knownPeers.includes(peerId)) {
+                knownPeers.push(peerId);
+                localStorage.setItem('chatRoomPeers', JSON.stringify(knownPeers));
+            }
+            
+            // Try to connect to all known peers
+            knownPeers.forEach(id => {
+                if (id !== peerId) { // Don't connect to ourselves
+                    const conn = peer.connect(id);
+                    if (conn) {
+                        handleConnection(conn);
+                    }
+                }
+            });
+            
+            // Clean up old peers (in a real app would be done by a more robust mechanism)
+            setTimeout(() => {
+                localStorage.setItem('chatRoomPeers', JSON.stringify([peerId]));
+            }, 1000);
+        }
+        
+        // Function to handle a new connection (both incoming and outgoing)
+        function handleConnection(conn) {
+            // Add to our connections array if not already there
+            if (!connections.some(c => c.peer === conn.peer)) {
+                connections.push(conn);
+                updateUserCount();
+            }
+            
+            // Handle connection opening
+            conn.on('open', () => {
+                console.log('Connection established with peer:', conn.peer);
+                
+                // Send our user info
+                conn.send({
+                    type: 'user-info',
+                    username: username
+                });
+            });
+            
+            // Handle receiving data
+            conn.on('data', data => {
+                if (data.type === 'user-info') {
+                    showSystemMessage(`${data.username} joined the chat`);
+                } else {
+                    // Regular chat message
+                    addMessageToUI(data.text, data.sender);
+                }
+            });
+            
+            // Handle connection closing
+            conn.on('close', () => {
+                console.log('Connection closed with peer:', conn.peer);
+                
+                // Remove from connections array
+                connections = connections.filter(c => c.peer !== conn.peer);
+                updateUserCount();
+            });
+            
+            // Handle errors
+            conn.on('error', err => {
+                console.error('Connection error:', err);
+                
+                // Remove from connections array
+                connections = connections.filter(c => c.peer !== conn.peer);
+                updateUserCount();
+            });
+        }
+        
+        // Function to update the user count display
+        function updateUserCount() {
+            // +1 for ourselves
+            userCountSpan.textContent = connections.length + 1;
+        }
+        
+        // Event listeners
+        sendButton.addEventListener('click', sendMessage);
+        
+        messageInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+        
+        joinButton.addEventListener('click', () => {
+            const inputUsername = usernameInput.value.trim();
+            if (inputUsername) {
+                username = inputUsername;
+                usernameModal.style.display = 'none';
+                initializePeer();
+            }
+        });
+        
+        usernameInput.addEventListener('keypress', e => {
+            if (e.key === 'Enter') {
+                joinButton.click();
+            }
+        });
+        
+        // Focus the username input when the page loads
+        window.addEventListener('load', () => {
+            usernameInput.focus();
+        });
+    </script>
+</body>
+</html>
