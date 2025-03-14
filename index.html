@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P2P Chat Room</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.4.7/peerjs.min.js"></script>
+  <style>
+    /* (CSS remains unchanged) */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    }
+    
+    body {
+      background-color: #f5f5f5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .container {
+      max-width: 800px;
+      width: 100%;
+      margin: auto;
+      padding: 20px;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .header h1 {
+      color: #333;
+      margin-bottom: 5px;
+    }
+    
+    .header p {
+      color: #666;
+    }
+    
+    .status {
+      padding: 10px;
+      background-color: #e9e9e9;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    
+    .status.online {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    
+    .chat-area {
+      flex: 1;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    
+    .messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    .message {
+      margin-bottom: 15px;
+      max-width: 80%;
+    }
+    
+    .message.sent {
+      margin-left: auto;
+    }
+    
+    .message .bubble {
+      padding: 10px 15px;
+      border-radius: 18px;
+      display: inline-block;
+      word-break: break-word;
+    }
+    
+    .message.received .bubble {
+      background-color: #f1f0f0;
+      color: #333;
+      border-top-left-radius: 5px;
+    }
+    
+    .message.sent .bubble {
+      background-color: #0b93f6;
+      color: white;
+      border-top-right-radius: 5px;
+    }
+    
+    .message .meta {
+      font-size: 12px;
+      color: #999;
+      margin-top: 5px;
+    }
+    
+    .input-area {
+      display: flex;
+      padding: 15px;
+      background-color: #f9f9f9;
+      border-top: 1px solid #eee;
+    }
+    
+    .input-area input {
+      flex: 1;
+      padding: 12px 15px;
+      border: 1px solid #ddd;
+      border-radius: 24px;
+      outline: none;
+      font-size: 16px;
+    }
+    
+    .input-area button {
+      background-color: #0b93f6;
+      color: white;
+      border: none;
+      border-radius: 24px;
+      padding: 0 20px;
+      margin-left: 10px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    
+    .input-area button:hover {
+      background-color: #0a84e0;
+    }
+    
+    .username-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    
+    .modal-content {
+      background-color: white;
+      padding: 30px;
+      border-radius: 8px;
+      width: 300px;
+      text-align: center;
+    }
+    
+    .modal-content h2 {
+      margin-bottom: 20px;
+      color: #333;
+    }
+    
+    .modal-content input {
+      width: 100%;
+      padding: 12px 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      font-size: 16px;
+    }
+    
+    .modal-content button {
+      background-color: #0b93f6;
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    
+    .users-count {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+    
+    .system-message {
+      text-align: center;
+      margin: 10px 0;
+      color: #888;
+      font-style: italic;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>P2P Chat Room</h1>
+      <p>Chat directly with others - no server, no authentication</p>
+      <div class="users-count">Connected users: <span id="user-count">1</span></div>
+    </div>
+    
+    <div id="status" class="status">Connecting to the P2P network...</div>
+    
+    <div class="chat-area">
+      <div id="messages" class="messages">
+        <div class="system-message">Welcome to the chat! Messages are sent directly between users.</div>
+      </div>
+      
+      <div class="input-area">
+        <input type="text" id="message-input" placeholder="Type your message..." disabled>
+        <button id="send-button" disabled>Send</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="username-modal" class="username-modal">
+    <div class="modal-content">
+      <h2>Enter a Username</h2>
+      <input type="text" id="username-input" placeholder="Your name">
+      <button id="join-button">Join Chat</button>
+    </div>
+  </div>
+  
+  <script>
+    // DOM elements
+    const messagesContainer = document.getElementById('messages');
+    const messageInput = document.getElementById('message-input');
+    const sendButton = document.getElementById('send-button');
+    const statusDiv = document.getElementById('status');
+    const usernameModal = document.getElementById('username-modal');
+    const usernameInput = document.getElementById('username-input');
+    const joinButton = document.getElementById('join-button');
+    const userCountSpan = document.getElementById('user-count');
+    
+    // User and connection data
+    let username = '';
+    let peerId = '';
+    let peer = null;
+    let connections = [];
+    
+    // Generate a random string for unique peer ID
+    function generateRandomId() {
+      return Math.random().toString(36).substr(2, 9);
+    }
+    
+    // Display a system message in the chat area
+    function showSystemMessage(message) {
+      const systemMsg = document.createElement('div');
+      systemMsg.className = 'system-message';
+      systemMsg.textContent = message;
+      messagesContainer.appendChild(systemMsg);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    // Add a chat message to the UI with sender info
+    function addMessageToUI(text, sender, isSent = false) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+      
+      const bubbleDiv = document.createElement('div');
+      bubbleDiv.className = 'bubble';
+      bubbleDiv.textContent = text;
+      
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'meta';
+      metaDiv.textContent = sender;
+      
+      messageDiv.appendChild(bubbleDiv);
+      messageDiv.appendChild(metaDiv);
+      
+      messagesContainer.appendChild(messageDiv);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    
+    // Send message to all connected peers and update the UI
+    function sendMessage() {
+      const msg = messageInput.value.trim();
+      if (msg === '') return;
+      const messageObj = {
+        text: msg,
+        sender: username,
+        timestamp: Date.now()
+      };
+      connections.forEach(conn => conn.send(messageObj));
+      addMessageToUI(msg, 'You', true);
+      messageInput.value = '';
+    }
+    
+    // Initialize peer with proper ICE server configuration (TURN/STUN) [1][11]
+    function initializePeer() {
+      peerId = 'chatroom-' + generateRandomId();
+      peer = new Peer(peerId, {
+        debug: 2,
+        config: {
+          iceServers: [
+            { urls: 'stun:144.91.116.148:3478' },
+            { urls: 'turn:144.91.116.148:3478?transport=udp', credential: 'secret', username: 'secret' },
+            { urls: 'turn:144.91.116.148:3478?transport=tcp', credential: 'secret', username: 'secret' }
+          ]
+        }
+      });
+      
+      // When the peer is open, update status and enable chat input
+      peer.on('open', id => {
+        console.log('My peer ID is: ' + id);
+        statusDiv.textContent = 'Connected to P2P network';
+        statusDiv.className = 'status online';
+        messageInput.disabled = false;
+        sendButton.disabled = false;
+        joinRoom();
+      });
+      
+      // Handle incoming connections
+      peer.on('connection', conn => {
+        handleConnection(conn);
+      });
+      
+      // Basic error handling
+      peer.on('error', err => {
+        console.error('Peer error:', err);
+        statusDiv.textContent = `Error: ${err.type}`;
+        statusDiv.className = 'status';
+      });
+    }
+    
+    // Announce your presence and attempt to connect to other peers
+    function joinRoom() {
+      showSystemMessage(`You joined as "${username}"`);
+      attemptToPairWithExistingPeers();
+    }
+    
+    // Use localStorage as a simple (local-only) peer discovery mechanism
+    function attemptToPairWithExistingPeers() {
+      let knownPeers = JSON.parse(localStorage.getItem('chatRoomPeers') || '[]');
+      if (!knownPeers.includes(peerId)) {
+        knownPeers.push(peerId);
+        localStorage.setItem('chatRoomPeers', JSON.stringify(knownPeers));
+      }
+      // Attempt to connect to each known peer except self
+      knownPeers.forEach(id => {
+        if (id !== peerId) {
+          const conn = peer.connect(id, { reliable: true });
+          if (conn) handleConnection(conn);
+        }
+      });
+      // Note: For production, consider using a dedicated signaling/tracker server.
+    }
+    
+    // Handle new connection (incoming or outgoing)
+    function handleConnection(conn) {
+      if (!connections.some(c => c.peer === conn.peer)) {
+        connections.push(conn);
+        updateUserCount();
+      }
+      
+      conn.on('open', () => {
+        console.log('Connection established with:', conn.peer);
+        // Send our user info
+        conn.send({ type: 'user-info', username: username });
+      });
+      
+      conn.on('data', data => {
+        if (data.type === 'user-info') {
+          showSystemMessage(`${data.username} joined the chat`);
+        } else {
+          addMessageToUI(data.text, data.sender);
+        }
+      });
+      
+      conn.on('close', () => {
+        console.log('Connection closed with:', conn.peer);
+        connections = connections.filter(c => c.peer !== conn.peer);
+        updateUserCount();
+      });
+      
+      conn.on('error', err => {
+        console.error('Connection error with:', conn.peer, err);
+        connections = connections.filter(c => c.peer !== conn.peer);
+        updateUserCount();
+      });
+    }
+    
+    // Update the count of connected users (including self)
+    function updateUserCount() {
+      userCountSpan.textContent = connections.length + 1;
+    }
+    
+    // Event listeners for sending messages
+    sendButton.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', e => {
+      if (e.key === 'Enter') sendMessage();
+    });
+    
+    // Event listener for joining chat
+    joinButton.addEventListener('click', () => {
+      const inputName = usernameInput.value.trim();
+      if (inputName) {
+        username = inputName;
+        usernameModal.style.display = 'none';
+        initializePeer();
+      }
+    });
+    
+    usernameInput.addEventListener('keypress', e => {
+      if (e.key === 'Enter') joinButton.click();
+    });
+    
+    // Focus on username input upon page load
+    window.addEventListener('load', () => {
+      usernameInput.focus();
+    });
+  </script>
+</body>
+</html>
